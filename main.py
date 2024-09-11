@@ -1,4 +1,5 @@
 import csv
+import json
 from datetime import datetime
 
 from pytz import timezone
@@ -32,17 +33,21 @@ class Bot():
         print(f'Number of cards found: {len(cards)}')
 
         records = self.get_jobs(cards)
-        with open('vagas.csv', 'w', newline='') as file:
-            writer = csv.writer(file)
-            writer.writerow(
-                "job_url, job_title, company, location, job_date".split(","))
 
-            for record in records:
-                writer.writerow([
-                    record.job_url, record.job_title,
-                    record.company, record.location,
-                    record.job_date, record.job_source_id
-                ])
+        data = [record.__dict__ for record in records]
+
+        with open('vagas.json', 'w', newline='') as file:
+            json.dump(data, file, indent=4, ensure_ascii=False)
+            # writer = csv.writer(file)
+            # writer.writerow(
+            #     "job_url, job_title, company, location, job_date".split(","))
+
+            # for record in records:
+            #     writer.writerow([
+            #         record.job_url, record.job_title,
+            #         record.company, record.location,
+            #         record.job_date, record.job_source_id
+            #     ])
 
     def get_brasilia_date_time_str(self) -> str:
         return datetime.now(timezone('America/Sao_Paulo')).strftime(DATE_TIME_FORMAT)
