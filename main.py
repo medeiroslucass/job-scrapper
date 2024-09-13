@@ -4,9 +4,13 @@ from datetime import datetime
 
 from pytz import timezone
 from selenium import webdriver
-from selenium.common.exceptions import NoSuchElementException
+from selenium.common.exceptions import (ElementClickInterceptedException,
+                                        NoSuchElementException,
+                                        TimeoutException)
 from selenium.webdriver.common.by import By
 from selenium.webdriver.remote.webelement import WebElement
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.ui import WebDriverWait
 
 from record import JobRecord
 from web_driver import CustomWebDriver
@@ -20,6 +24,17 @@ class Bot():
         self.driver = CustomWebDriver()
         self.url = url
 
+    def close_cookies_banner(self, browser):
+        try:
+            cookies_button = WebDriverWait(browser, 5).until(
+                EC.element_to_be_clickable(
+                    (By.ID, "onetrust-accept-btn-handler"))
+            )
+            cookies_button.click()
+            print("Closed cookie banner.")
+        except (NoSuchElementException, TimeoutException):
+            print("Cookie banner not found or already closed.")
+
     def get_scrape_data(self):
         cards = []
 
@@ -27,27 +42,61 @@ class Bot():
             service=self.driver.get_service(), options=self.driver.get_options())
         browser.get(self.url)
 
-        cards.extend(browser.find_elements(
-            by=By.CLASS_NAME, value='job_seen_beacon'))
+        all_records = []
 
-        print(f'Number of cards found: {len(cards)}')
+        self.close_cookies_banner(browser)
 
-        records = self.get_jobs(cards)
+        while True:
+            try:
+                WebDriverWait(browser, 10).until(
+                    EC.presence_of_element_located(
+                        (By.CLASS_NAME, 'job_seen_beacon'))
+                )
+            except TimeoutException:
+                print("Elements were not loaded in time.")
+                break
 
-        data = [record.__dict__ for record in records]
+            cards = browser.find_elements(By.CLASS_NAME, 'job_seen_beacon')
 
-        with open('vagas.json', 'w', newline='') as file:
+            print(f'Number of cards found on the page: {len(cards)}')
+
+            records = self.get_jobs(cards)
+            all_records.extend(records)
+
+            try:
+                next_button = WebDriverWait(browser, 10).until(
+                    EC.visibility_of_element_located(
+                        (By.XPATH, "//a[@data-testid='pagination-page-next']"))
+                )
+
+                if next_button.is_enabled():
+                    WebDriverWait(browser, 10).until(
+                        EC.element_to_be_clickable(
+                            (By.XPATH, "//a[@data-testid='pagination-page-next']"))
+                    )
+                    next_button.click()
+
+                    WebDriverWait(browser, 10).until(
+                        EC.staleness_of(cards[0])
+                    )
+                else:
+                    print(
+                        "'Next' button found, but disabled. Ending the collection.")
+                    break
+
+            except (NoSuchElementException, TimeoutException):
+                print("No more pages to scroll through.")
+                break
+
+            except Exception as e:
+                print(f"Error trying to advance to the next page: {e}")
+                break
+
+        print(f"Total records obtained: {len(all_records)}")
+        data = [record.__dict__ for record in all_records]
+
+        with open('jobs.json', 'w', newline='') as file:
             json.dump(data, file, indent=4, ensure_ascii=False)
-            # writer = csv.writer(file)
-            # writer.writerow(
-            #     "job_url, job_title, company, location, job_date".split(","))
-
-            # for record in records:
-            #     writer.writerow([
-            #         record.job_url, record.job_title,
-            #         record.company, record.location,
-            #         record.job_date, record.job_source_id
-            #     ])
 
     def get_brasilia_date_time_str(self) -> str:
         return datetime.now(timezone('America/Sao_Paulo')).strftime(DATE_TIME_FORMAT)

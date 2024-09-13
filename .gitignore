@@ -2,5 +2,5 @@ venv/*
 .vscode/*
 __pycache__/*
 *.pyc
-vagas.csv
-vagas.json
+jobs.csv
+jobs.json
