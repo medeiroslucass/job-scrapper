@@ -1,14 +1,12 @@
-import csv
 import json
+import logging
 from datetime import datetime
 
+from bs4 import BeautifulSoup
 from pytz import timezone
 from selenium import webdriver
-from selenium.common.exceptions import (ElementClickInterceptedException,
-                                        NoSuchElementException,
-                                        TimeoutException)
+from selenium.common.exceptions import NoSuchElementException, TimeoutException
 from selenium.webdriver.common.by import By
-from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
@@ -17,82 +15,94 @@ from web_driver import CustomWebDriver
 
 DATE_TIME_FORMAT = '%Y-%m-%d %H:%M:%S'
 
+config = {
+    'url_base': 'https://br.indeed.com/jobs?q=desenvolvedor+python&l=Remoto&fromage=1',
+    'job_card_selector': '.job_seen_beacon',
+    'next_page_selector': "//a[@data-testid='pagination-page-next']",
+}
 
-class Bot():
+logging.basicConfig(level=logging.INFO,
+                    format='%(asctime)s - %(levelname)s - %(message)s')
 
-    def __init__(self, url) -> None:
+
+class Bot:
+    def __init__(self, url: str) -> None:
         self.driver = CustomWebDriver()
+        self.browser = webdriver.Chrome(
+            service=self.driver.get_service(), options=self.driver.get_options())
         self.url = url
 
-    def close_cookies_banner(self, browser):
+    def close_cookies_banner(self) -> None:
         try:
-            cookies_button = WebDriverWait(browser, 5).until(
+            cookies_button = WebDriverWait(self.browser, 5).until(
                 EC.element_to_be_clickable(
                     (By.ID, "onetrust-accept-btn-handler"))
             )
             cookies_button.click()
-            print("Closed cookie banner.")
+            logging.info("Closed cookie banner.")
         except (NoSuchElementException, TimeoutException):
-            print("Cookie banner not found or already closed.")
+            logging.info("Cookie banner not found or already closed.")
 
-    def get_scrape_data(self):
-        cards = []
+    def wait_for_elements(self, by: By, value: str, timeout: int = 10) -> None:
+        try:
+            WebDriverWait(self.browser, timeout).until(
+                EC.presence_of_element_located((by, value))
+            )
+        except TimeoutException:
+            logging.error("Elements were not loaded in time.")
+            raise
 
-        browser = webdriver.Chrome(
-            service=self.driver.get_service(), options=self.driver.get_options())
-        browser.get(self.url)
+    def click_next_page(self) -> bool:
+        try:
+            next_button = WebDriverWait(self.browser, 10).until(
+                EC.visibility_of_element_located(
+                    (By.XPATH, config['next_page_selector']))
+            )
 
+            if next_button.is_enabled():
+                WebDriverWait(self.browser, 10).until(
+                    EC.element_to_be_clickable(
+                        (By.XPATH, config['next_page_selector']))
+                )
+                next_button.click()
+                return True
+            else:
+                logging.info(
+                    "'Next' button found, but disabled. Ending the collection.")
+                return False
+
+        except (NoSuchElementException, TimeoutException):
+            logging.info("No more pages to scroll through.")
+            return False
+
+        except Exception as e:
+            logging.error(f"Error trying to advance to the next page: {e}")
+            return False
+
+    def get_scrape_data(self) -> None:
+        self.browser.get(self.url)
         all_records = []
 
-        self.close_cookies_banner(browser)
+        self.close_cookies_banner()
 
         while True:
             try:
-                WebDriverWait(browser, 10).until(
-                    EC.presence_of_element_located(
-                        (By.CLASS_NAME, 'job_seen_beacon'))
-                )
+                self.wait_for_elements(By.CLASS_NAME, 'job_seen_beacon')
             except TimeoutException:
-                print("Elements were not loaded in time.")
                 break
 
-            cards = browser.find_elements(By.CLASS_NAME, 'job_seen_beacon')
-
-            print(f'Number of cards found on the page: {len(cards)}')
+            page_source = self.browser.page_source
+            soup = BeautifulSoup(page_source, 'html.parser')
+            cards = soup.select(config['job_card_selector'])
+            logging.info(f'Number of cards found on the page: {len(cards)}')
 
             records = self.get_jobs(cards)
             all_records.extend(records)
 
-            try:
-                next_button = WebDriverWait(browser, 10).until(
-                    EC.visibility_of_element_located(
-                        (By.XPATH, "//a[@data-testid='pagination-page-next']"))
-                )
-
-                if next_button.is_enabled():
-                    WebDriverWait(browser, 10).until(
-                        EC.element_to_be_clickable(
-                            (By.XPATH, "//a[@data-testid='pagination-page-next']"))
-                    )
-                    next_button.click()
-
-                    WebDriverWait(browser, 10).until(
-                        EC.staleness_of(cards[0])
-                    )
-                else:
-                    print(
-                        "'Next' button found, but disabled. Ending the collection.")
-                    break
-
-            except (NoSuchElementException, TimeoutException):
-                print("No more pages to scroll through.")
+            if not self.click_next_page():
                 break
 
-            except Exception as e:
-                print(f"Error trying to advance to the next page: {e}")
-                break
-
-        print(f"Total records obtained: {len(all_records)}")
+        logging.info(f"Total records obtained: {len(all_records)}")
         data = [record.__dict__ for record in all_records]
 
         with open('jobs.json', 'w', newline='') as file:
@@ -105,55 +115,34 @@ class Bot():
         record = JobRecord()
         url_template = "https://br.indeed.com/viewjob?jk={}"
 
-        if isinstance(card, WebElement):
-            web_element = card
-        else:
-            return None
+        element = card.find('a')
+        record.job_source_id = element['data-jk']
+        record.job_title = element.get_text(strip=True)
+        record.job_url = url_template.format(record.job_source_id)
 
-        element = web_element.find_element(
-            by=By.TAG_NAME,
-            value="a"
-        )
+        company_element = card.select_one('span[data-testid="company-name"]')
+        record.company = company_element.get_text(
+            strip=True) if company_element else ''
 
-        record.job_source_id = element.get_attribute("data-jk")
-        record.job_title = element.text
-
-        record.job_url = url_template.format(
-            record.job_source_id)
-
-        try:
-            record.company = web_element.find_element(by=By.XPATH, value='.//span[@data-testid="company-name"]').text if (
-                not web_element.find_element(by=By.XPATH, value='.//span[@data-testid="company-name"]') == None) else ''
-        except NoSuchElementException as e:
-            print(f"Element not found: {e}")
-            record.company = ''
-
-        location = web_element.find_element(
-            by=By.XPATH, value='.//div[@data-testid="text-location"]')
-
-        if location is None:
-            record.location = ''
-        else:
-            record.location = location.text
+        location_element = card.select_one('div[data-testid="text-location"]')
+        record.location = location_element.get_text(
+            strip=True) if location_element else ''
 
         record.job_date = self.get_brasilia_date_time_str()
 
         return record
 
     def get_jobs(self, cards: list) -> list:
-        result = []
+        return [self.convert_to_record(card) for card in cards if card]
 
-        for card in cards:
-            record = self.convert_to_record(card)
-
-            if not record is None:
-                result.append(record)
-
-        return result
+    def close_browser(self) -> None:
+        self.browser.quit()
 
 
 if __name__ == '__main__':
-    # url = 'https://br.indeed.com/jobs?q=desenvolvedor+python&l=Remoto'
-    url = "https://br.indeed.com/jobs?q=desenvolvedor+python&l=Remoto&fromage=1"
+    url = config['url_base']
     bot = Bot(url)
-    bot.get_scrape_data()
+    try:
+        bot.get_scrape_data()
+    finally:
+        bot.close_browser()

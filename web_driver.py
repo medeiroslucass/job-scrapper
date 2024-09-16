@@ -1,9 +1,15 @@
+import logging
 import platform
 
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 
+logging.basicConfig(level=logging.INFO,
+                    format='%(asctime)s - %(levelname)s - %(message)s')
+
+# Path to chromedriver | Change this path to your chromedriver path
 CHROME_DRIVER_PATH = "/usr/local/bin/chromedriver/chromedriver"
+# Path to chrome binary | Change this path to your chrome binary path
 GOOGLE_CHROME_PATH = "/usr/bin/google-chrome"
 
 
@@ -14,7 +20,7 @@ class CustomWebDriver:
         options.page_load_strategy = 'eager'
 
         if not self.is_windows_os():
-            print(f"Using Chrome binary at: {GOOGLE_CHROME_PATH}")
+            logging.info(f"Using Chrome binary at: {GOOGLE_CHROME_PATH}")
             options.binary_location = GOOGLE_CHROME_PATH
             options.add_argument('--headless')
 
@@ -26,7 +32,7 @@ class CustomWebDriver:
 
     def get_service(self):
         if not self.is_windows_os():
-            print(f"Using ChromeDriver at: {CHROME_DRIVER_PATH}")
+            logging.info(f"Using ChromeDriver at: {CHROME_DRIVER_PATH}")
             service = Service(executable_path=CHROME_DRIVER_PATH)
         else:
             service = Service()
