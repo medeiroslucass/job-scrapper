@@ -15,11 +15,8 @@ from web_driver import CustomWebDriver
 
 DATE_TIME_FORMAT = '%Y-%m-%d %H:%M:%S'
 
-config = {
-    'url_base': 'https://br.indeed.com/jobs?q=desenvolvedor+python&l=Remoto&fromage=1',
-    'job_card_selector': '.job_seen_beacon',
-    'next_page_selector': "//a[@data-testid='pagination-page-next']",
-}
+with open('config.json') as config_file:
+    config = json.load(config_file)
 
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(levelname)s - %(message)s')

@@ -1,0 +1,5 @@
+{
+    "url_base": "https://br.indeed.com/jobs?q=desenvolvedor+python&l=Remoto&fromage=1",
+    "job_card_selector": ".job_seen_beacon",
+    "next_page_selector": "//a[@data-testid='pagination-page-next']"
+}
