@@ -4,7 +4,7 @@ A scraper for collecting job listings from Indeed using Selenium and BeautifulSo
 
 ## Requirements
 
-- Python 3.7 or higher
+- Python 3.10 or higher
 - Chrome
 
 ## Installation
