@@ -1,14 +1,14 @@
 import logging
 import platform
 
+from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
 
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(levelname)s - %(message)s')
 
-# Path to chromedriver | Change this path to your chromedriver path
-CHROME_DRIVER_PATH = "/usr/local/bin/chromedriver/chromedriver"
 # Path to chrome binary | Change this path to your chrome binary path
 GOOGLE_CHROME_PATH = "/usr/bin/google-chrome"
 
@@ -31,12 +31,8 @@ class CustomWebDriver:
         return options
 
     def get_service(self):
-        if not self.is_windows_os():
-            logging.info(f"Using ChromeDriver at: {CHROME_DRIVER_PATH}")
-            service = Service(executable_path=CHROME_DRIVER_PATH)
-        else:
-            service = Service()
-
+        # Return the Service object created with ChromeDriverManager
+        service = Service(ChromeDriverManager().install())
         return service
 
     def is_windows_os(self):
