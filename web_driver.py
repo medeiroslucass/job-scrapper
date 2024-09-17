@@ -9,18 +9,21 @@ from webdriver_manager.chrome import ChromeDriverManager
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(levelname)s - %(message)s')
 
-# Path to chrome binary | Change this path to your chrome binary path
-GOOGLE_CHROME_PATH = "/usr/bin/google-chrome"
+if platform.system().lower() == 'windows':
+    GOOGLE_CHROME_PATH = "C:/Program Files/Google/Chrome/Application/chrome.exe"
+elif platform.system().lower() == 'darwin':  # macOS
+    GOOGLE_CHROME_PATH = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+else:
+    GOOGLE_CHROME_PATH = "/usr/bin/google-chrome"
 
 
 class CustomWebDriver:
-
     def get_options(self):
         options = Options()
         options.page_load_strategy = 'eager'
 
-        if not self.is_windows_os():
-            logging.info(f"Using Chrome binary at: {GOOGLE_CHROME_PATH}")
+        logging.info(f"Using Chrome binary at: {GOOGLE_CHROME_PATH}")
+        if platform.system().lower() != 'windows':
             options.binary_location = GOOGLE_CHROME_PATH
             options.add_argument('--headless')
 
@@ -34,6 +37,3 @@ class CustomWebDriver:
         # Return the Service object created with ChromeDriverManager
         service = Service(ChromeDriverManager().install())
         return service
-
-    def is_windows_os(self):
-        return platform.system().lower() == 'windows'
